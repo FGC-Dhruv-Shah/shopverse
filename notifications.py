@@ -40,3 +40,15 @@ class NotificationDispatcher:
             reason,
         )
         return NotificationResult(delivered=True, channel="email")
+
+    def send_report_ready(
+        self, customer: Customer, order: Order
+    ) -> NotificationResult:
+        logger.info(
+            "Sending report-ready email to %s (%s) at %s for order %s",
+            customer.full_name,
+            customer.email,
+            customer.billing_address,
+            order.order_id,
+        )
+        return NotificationResult(delivered=True, channel="email")
