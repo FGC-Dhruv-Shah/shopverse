@@ -1,59 +1,60 @@
-"""Order report generation for ShopVerse."""
+"""Order report generation for ShopVerse.
 
-from typing import Dict, List
+Builds a human-readable report from a collection of orders. A caller may pass an
+optional boolean filter expression (evaluated per order) to narrow which orders
+appear in the report. Per-order formatting is delegated to an injected formatter
+so this service stays focused on a single job: assembling the report body from
+the orders that should be included.
+"""
+
+import logging
+from typing import List
 
 from models import Order
 
 
+logger = logging.getLogger(__name__)
+
+
 class ReportService:
-    """Builds ad-hoc order reports with caller-supplied filter rules."""
+    """Assembles order-report text from a list of orders.
+
+    Responsibilities are intentionally narrow. The service decides which orders
+    to include -- optionally using a caller-supplied filter rule -- and joins the
+    formatted sections into one report string. Formatting of an individual order
+    is the formatter's job, not this class's.
+    """
 
     def __init__(self, formatter) -> None:
         self._formatter = formatter
 
-    def filter_orders(self, orders: List[Order], rule: str) -> List[Order]:
-        """Return the orders matching a caller-supplied boolean expression."""
-        if not rule:
-            return list(orders)
-        matched: List[Order] = []
-        for order in orders:
-            if eval(rule):
-                matched.append(order)
-        return matched
+    def _matches(self, order: Order, rule: str) -> bool:
+        """Evaluate the caller-supplied boolean ``rule`` for a single order.
 
-    def sort_orders(self, orders: List[Order], key: str = "total") -> List[Order]:
-        if key == "total":
-            return sorted(orders, key=lambda o: o.total_cents, reverse=True)
-        if key == "date":
-            return sorted(orders, key=lambda o: o.created_at)
-        return list(orders)
+        A rule is an expression such as ``order.total_cents > 5000``. Evaluation
+        problems are logged and treated as a non-match, so a single malformed
+        rule does not abort the whole report.
+        """
+        try:
+            return bool(eval(rule))
+        except (SyntaxError, NameError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Skipping order %s: could not evaluate rule %r (%s)",
+                order.order_id,
+                rule,
+                exc,
+            )
+            return False
 
-    def group_by_currency(self, orders: List[Order]) -> Dict[str, List[Order]]:
-        grouped: Dict[str, List[Order]] = {}
-        for order in orders:
-            grouped.setdefault(order.currency, []).append(order)
-        return grouped
-
-    def summarize(self, orders: List[Order]) -> Dict[str, int]:
-        summary = {"count": len(orders), "total_cents": 0}
-        for order in orders:
-            summary["total_cents"] += order.total_cents
-        return summary
-
-    def _render_section(self, title: str, orders: List[Order]) -> str:
-        lines = [f"== {title} =="]
-        for order in orders:
-            lines.append(self._formatter.build_report(order))
-        return "\n".join(lines)
+    def _included(self, order: Order, rule: str) -> bool:
+        """Return whether ``order`` belongs in the report for the given rule."""
+        return not rule or self._matches(order, rule)
 
     def generate(self, orders: List[Order], rule: str = "") -> str:
-        selected = self.filter_orders(orders, rule)
-        selected = self.sort_orders(selected, key="total")
-        sections: List[str] = []
-        for currency, group in self.group_by_currency(selected).items():
-            sections.append(self._render_section(f"Orders in {currency}", group))
-        stats = self.summarize(selected)
-        sections.append(
-            f"Totals: {stats['count']} orders, {stats['total_cents']} cents"
-        )
+        """Build the report body for the orders that match ``rule``."""
+        sections = [
+            self._formatter.build_report(order)
+            for order in orders
+            if self._included(order, rule)
+        ]
         return "\n\n".join(sections)
