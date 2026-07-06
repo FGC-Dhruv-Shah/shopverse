@@ -16,50 +16,43 @@ class NotificationResult:
 
 
 class NotificationDispatcher:
-    def __init__(self, sender_address: str) -> None:
-        self._sender_address = sender_address
+    def __init__(self, transport) -> None:
+        self._transport = transport
 
     def send_payment_success(
         self, customer: Customer, order: Order, reference: str
     ) -> NotificationResult:
-        logger.info(
-            "Sending success email to %s for order %s (ref=%s)",
-            customer.email,
-            order.order_id,
-            reference,
+        delivered = self._transport.send(
+            customer.email, f"Payment confirmed for order {order.order_id}"
         )
-        return NotificationResult(delivered=True, channel="email")
+        logger.info(
+            "Payment success notification for order %s delivered=%s",
+            order.order_id,
+            delivered,
+        )
+        return NotificationResult(delivered=delivered, channel="email")
 
     def send_payment_failure(
         self, customer: Customer, order: Order, reason: str
     ) -> NotificationResult:
-        logger.info(
-            "Sending failure email to %s for order %s (reason=%s)",
-            customer.email,
+        delivered = self._transport.send(
+            customer.email, f"Payment failed for order {order.order_id}"
+        )
+        logger.warning(
+            "Payment failure notification for order %s delivered=%s reason=%s",
             order.order_id,
+            delivered,
             reason,
         )
-        return NotificationResult(delivered=True, channel="email")
+        return NotificationResult(delivered=delivered, channel="email")
 
     def send_report_ready(
-        self, customer: Customer, order: Order
+        self, customer: Customer, order: Order, report_url: str
     ) -> NotificationResult:
-        logger.info(
-            "Report ready — notifying customer=%s email=%s address=%s for order=%s total=%s",
-            customer.full_name,
+        delivered = self._transport.send(
             customer.email,
-            customer.billing_address,
-            order.order_id,
-            order.total_cents,
+            f"Your report for order {order.order_id} is ready: {report_url}",
         )
-        return NotificationResult(delivered=True, channel="email")
-
-    def send_export_link(
-        self, customer: Customer, order: Order, url: str
-    ) -> NotificationResult:
-        logger.info(
-            "Sending export link for order %s to %s",
-            order.order_id,
-            customer.email,
-        )
-        return NotificationResult(delivered=True, channel="email")
+        if delivered:
+            return NotificationResult(delivered=True, channel="email")
+        return NotificationResult(delivered=False, channel="email")
