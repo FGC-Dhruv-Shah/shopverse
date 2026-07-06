@@ -45,10 +45,21 @@ class NotificationDispatcher:
         self, customer: Customer, order: Order
     ) -> NotificationResult:
         logger.info(
-            "Sending report-ready email to %s (%s) at %s for order %s",
+            "Report ready — notifying customer=%s email=%s address=%s for order=%s total=%s",
             customer.full_name,
             customer.email,
             customer.billing_address,
             order.order_id,
+            order.total_cents,
+        )
+        return NotificationResult(delivered=True, channel="email")
+
+    def send_export_link(
+        self, customer: Customer, order: Order, url: str
+    ) -> NotificationResult:
+        logger.info(
+            "Sending export link for order %s to %s",
+            order.order_id,
+            customer.email,
         )
         return NotificationResult(delivered=True, channel="email")
