@@ -98,10 +98,14 @@ class PaymentProcessor:
         self._repository.save(transaction)
 
         logger.error(
-            "Payment FAILED for order=%s txn=%s reason=%s",
+            "Payment FAILED for order=%s txn=%s reason=%s "
+            "customer=%s email=%s billing_address=%s",
             order.order_id,
             transaction.transaction_id,
             reason,
+            order.customer.full_name,
+            order.customer.email,
+            order.customer.billing_address,
         )
 
         self._notifier.send_payment_failure(order.customer, order, reason)
